@@ -125,12 +125,6 @@ public static class MountedMissileCooldowns
 
         float remaining = entry.OriginalDuration - (Time.timeSinceLevelLoad - entry.OriginalTime);
 
-        if (remaining <= 0f)
-        {
-            CheckCooldown(missile);
-            return;
-        }
-
         UniTask.Void(async () =>
         {
             await UniTask.Delay(TimeSpan.FromSeconds(remaining), DelayType.DeltaTime);
@@ -157,7 +151,7 @@ public static class MountedMissile_Fire_LeifCooldownMunitions
             mod = (float)CooldownMunitions.CooldownModifier.BoxedValue;
         } catch
         {
-            mod = 0f;
+            mod = 1f;
             // I suspect this might currently be occurring on the server instance
             CooldownMunitions.Instance?.DebugLog("Bepinex config entry wasn't set");
         }

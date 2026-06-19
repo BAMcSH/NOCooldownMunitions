@@ -10,6 +10,8 @@ using Cysharp.Threading.Tasks;
 using NuclearOption.Networking;
 using Mirage.Serialization;
 
+
+
 namespace CooldownMunitions;
 
 [BepInPlugin(PluginInfo.PLUGIN_GUID, PluginInfo.PLUGIN_NAME, PluginInfo.PLUGIN_VERSION)]
@@ -21,6 +23,8 @@ public class CooldownMunitions : BaseUnityPlugin
 
     public void Awake()
     {
+        //TODO: Make this modifier use the host's value in multiplayer
+        // The host's is the only one that matters, so the UI will be wrong if others have different values.
         CooldownModifier = Config.Bind("Base",      // The section under which the option is shown
                                          "Cooldown Modifier",  // The key of the configuration option in the configuration file
                                          1f, // The default value
@@ -29,17 +33,20 @@ public class CooldownMunitions : BaseUnityPlugin
         this.harmony = new Harmony(PluginInfo.PLUGIN_GUID);
         //harmony.Patch(AccessTools.Method(AccessTools.TypeByName("Unit"), "UserCode_CmdAskFullAmmoInternal_-1739804082"), prefix: new HarmonyMethod(typeof(RpcSyncAmmoTotalPrefix), nameof(RpcSyncAmmoTotalPrefix.Prefix)));
         this.harmony.PatchAll();
-        Logger.LogInfo($"Plugin {PluginInfo.PLUGIN_NAME} is loaded and patches applied.");
+        CooldownMunitions.Instance?.DebugLog($"Plugin {PluginInfo.PLUGIN_NAME} is loaded and patches applied.");
     }
     
     private void OnDestroy()
     {
-        Logger.LogInfo($"Plugin {PluginInfo.PLUGIN_NAME} is being destroyed");
+        harmony.UnpatchSelf();
+        CooldownMunitions.Instance?.DebugLog($"Plugin {PluginInfo.PLUGIN_NAME} is destroyed.");
     }
-    
-    public void Log(string log)
+
+    public void DebugLog(string log)
     {
+#if DEBUG_PRINTS
         Logger.LogInfo(log);
+#endif
     }
 }
 
@@ -102,7 +109,7 @@ public static class MountedMissileCooldowns
     
     public static void DoCooldown(MountedMissile missile, WeaponStation station)
     {
-        CooldownMunitions.Instance?.Log($"Rearming a missile.");
+        CooldownMunitions.Instance?.DebugLog($"Rearming a missile.");
         missile.Rearm();
         station.AccountAmmo();
         station.Updated();
@@ -112,7 +119,7 @@ public static class MountedMissileCooldowns
 
     public static void TrackCooldownAsync(MountedMissile missile)
     {
-        CooldownMunitions.Instance?.Log($"Setting up Async call.");
+        CooldownMunitions.Instance?.DebugLog($"Setting up Async call.");
         if (!_cooldowns.TryGetValue(missile, out var entry))
             return;
 
@@ -142,7 +149,18 @@ public static class MountedMissile_Fire_LeifCooldownMunitions
     public static void Postfix(MountedMissile __instance, WeaponStation ___weaponStation, Unit ___attachedUnit)
     {
         float price = __instance.info.costPerRound * 1000;
-        CooldownMunitions.Instance?.Log($"Munition fired with price: {price}");
+        CooldownMunitions.Instance?.DebugLog($"Munition fired with price: {price}");
+        
+        float mod = 0f;
+        try
+        {
+            mod = (float)CooldownMunitions.CooldownModifier.BoxedValue;
+        } catch
+        {
+            mod = 0f;
+            // I suspect this might currently be occurring on the server instance
+            CooldownMunitions.Instance?.DebugLog("Bepinex config entry wasn't set");
+        }
         
         float cd = (float)Math.Pow(price, 0.72) + 40;
         MountedMissileCooldowns.SetCooldown(__instance, cd, ___weaponStation);
@@ -204,18 +222,6 @@ public static class WeaponStation_GetReloadStatusMax_LeifCooldownMunitions
     }
 }
 
-//[HarmonyPatch(typeof(WeaponStation), nameof(WeaponStation.Ready))]
-public static class WeaponStation_Ready_LeifCooldownMunitions
-{
-    private static bool Prefix(ref WeaponStation __instance, ref bool __result) {
-        if (!__instance.WeaponInfo.missile)
-            return true;
-            
-        __result = true;
-        return false;
-    }
-}
-
 [HarmonyPatch(typeof(WeaponStation), nameof(WeaponStation.LaunchMount))]
 public static class WeaponStation_LaunchMount_LeifCooldownMunitions
 {
@@ -223,7 +229,7 @@ public static class WeaponStation_LaunchMount_LeifCooldownMunitions
     {   
         if (___weaponIndex >= ___Weapons.Count)
         {
-            CooldownMunitions.Instance?.Log($"LaunchMount resetting weaponIndex");
+            CooldownMunitions.Instance?.DebugLog($"LaunchMount resetting weaponIndex");
             ___weaponIndex = 0;
         }
 

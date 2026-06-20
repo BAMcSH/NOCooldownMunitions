@@ -221,7 +221,7 @@ public static class WeaponStation_LaunchMount_LeifCooldownMunitions
 {
     public static bool Prefix(ref WeaponStation __instance, List<Weapon> ___Weapons, ref int ___weaponIndex)
     {   
-        if (___weaponIndex >= ___Weapons.Count)
+        if (___weaponIndex >= ___Weapons.Count && __instance.Ammo > 0)
         {
             CooldownMunitions.Instance?.DebugLog($"LaunchMount resetting weaponIndex");
             ___weaponIndex = 0;
